@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carte interactive</title>
+
+  <!-- Bootstrap CSS (sans integrity/crossorigin) -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
+  <!-- Leaflet CSS (sans integrity/crossorigin) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+  />
+
+  <!-- Notre propre fichier CSS -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Bouton pour ouvrir le menu latéral -->
+  <button
+    class="btn btn-primary m-2"
+    type="button"
+    data-bs-toggle="offcanvas"
+    data-bs-target="#sidebar"
+    aria-controls="sidebar"
+  >
+    ☰ Menu
+  </button>
+
+  <!-- Sidebar Offcanvas (Bootstrap) -->
+  <div
+    class="offcanvas offcanvas-start"
+    tabindex="-1"
+    id="sidebar"
+    aria-labelledby="sidebarLabel"
+  >
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="sidebarLabel">Gestion des points</h5>
+      <button
+        type="button"
+        class="btn-close text-reset"
+        data-bs-dismiss="offcanvas"
+        aria-label="Fermer"
+      ></button>
+    </div>
+    <div class="offcanvas-body">
+      <!-- Formulaire pour ajouter un nouveau point -->
+      <form id="add-point-form" class="mb-4">
+        <div class="mb-3">
+          <label for="new-desc" class="form-label">Description :</label>
+          <input
+            type="text"
+            class="form-control"
+            id="new-desc"
+            placeholder="Ex : Nouvelle localisation"
+            required
+          />
+        </div>
+
+        <!-- Nouvelle input unique “coordonnées” -->
+        <div class="mb-3">
+          <label for="new-coords" class="form-label">
+            Coordonnées (latitude, longitude) :
+          </label>
+          <input
+            type="text"
+            class="form-control"
+            id="new-coords"
+            placeholder="Ex : 48.8566, 2.3522"
+            required
+          />
+        </div>
+
+        <!-- Zone d’affichage des labels ou du message d’erreur -->
+        <div id="coord-feedback" class="mb-3"></div>
+
+        <div class="mb-3">
+          <label for="new-color" class="form-label">Couleur du repère :</label>
+          <input
+            type="color"
+            class="form-control form-control-color"
+            id="new-color"
+            value="#3388ff"
+            title="Choisir une couleur"
+          />
+        </div>
+        <button type="submit" class="btn btn-success w-100">
+          Ajouter le point
+        </button>
+      </form>
+
+      <!-- Section rétractable "Liste des points" -->
+      <div class="mb-3">
+        <button
+          class="btn btn-outline-secondary w-100"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#collapse-list"
+          aria-expanded="false"
+          aria-controls="collapse-list"
+        >
+          Liste des points
+        </button>
+        <div class="collapse mt-2" id="collapse-list">
+          <ul id="point-list" class="list-group"></ul>
+        </div>
+      </div>
+
+      <!-- Section rétractable "Relier deux points" -->
+      <div class="mb-3">
+        <button
+          class="btn btn-outline-secondary w-100"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#collapse-connect"
+          aria-expanded="false"
+          aria-controls="collapse-connect"
+        >
+          Relier deux points
+        </button>
+        <div class="collapse mt-2" id="collapse-connect">
+          <div class="mb-3">
+            <label for="select-point1" class="form-label">Point A :</label>
+            <select id="select-point1" class="form-select">
+              <option value="" selected disabled>Choisir...</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="select-point2" class="form-label">Point B :</label>
+            <select id="select-point2" class="form-select">
+              <option value="" selected disabled>Choisir...</option>
+            </select>
+          </div>
+          <button id="connect-btn" class="btn btn-primary w-100">
+            Relier
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- La carte Leaflet -->
+  <div id="map"></div>
+
+  <!-- Modal Bootstrap pour modifier un point -->
+  <div
+    class="modal fade"
+    id="editModal"
+    tabindex="-1"
+    aria-labelledby="editModalLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="edit-point-form">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editModalLabel">Modifier le point</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Fermer"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="edit-id" />
+            <div class="mb-3">
+              <label for="edit-desc" class="form-label">
+                Description :
+              </label>
+              <input
+                type="text"
+                class="form-control"
+                id="edit-desc"
+                required
+              />
+            </div>
+            <!-- Dans le modal, on garde deux champs séparés pour latitude/longitude -->
+            <div class="row mb-3">
+              <div class="col">
+                <label for="edit-lat" class="form-label">Latitude :</label>
+                <input
+                  type="number"
+                  step="any"
+                  class="form-control"
+                  id="edit-lat"
+                  required
+                />
+              </div>
+              <div class="col">
+                <label for="edit-lng" class="form-label">Longitude :</label>
+                <input
+                  type="number"
+                  step="any"
+                  class="form-control"
+                  id="edit-lng"
+                  required
+                />
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="edit-color" class="form-label">
+                Couleur du repère :
+              </label>
+              <input
+                type="color"
+                class="form-control form-control-color"
+                id="edit-color"
+                title="Choisir une couleur"
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Annuler
+            </button>
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS (sans integrity/crossorigin) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
+
+  <!-- Leaflet JS (sans integrity/crossorigin) -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+  ></script>
+
+  <!-- Sortable.js pour réordonner la liste -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  <!-- Notre propre script JS -->
+  <script src="index.js"></script>
+</body>
+</html>

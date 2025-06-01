@@ -1,0 +1,31 @@
+/* Hauteur de la carte pour occuper tout l’écran */
+#map {
+    height: 100vh;
+    width: 100%;
+  }
+  
+  /* Petite icône carrée pour afficher la couleur dans la liste */
+  .color-box {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: middle;
+    border: 1px solid #000;
+  }
+  
+  /* Curseur de déplacement pour les éléments de la liste */
+  .drag-handle {
+    cursor: grab;
+    margin-right: 8px;
+  }
+  
+  /* Styles pour le feedback (labels ou erreur) */
+  #coord-feedback label {
+    display: block;
+    font-weight: 500;
+  }
+  #coord-feedback .text-danger {
+    font-size: 0.9rem;
+  }
+  
