@@ -21,16 +21,59 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Bouton pour ouvrir le menu latéral -->
-  <button
-    class="btn btn-primary m-2"
-    type="button"
-    data-bs-toggle="offcanvas"
-    data-bs-target="#sidebar"
-    aria-controls="sidebar"
-  >
-    ☰ Menu
-  </button>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+    <div class="container-fluid">
+      <!-- Branding -->
+      <a class="navbar-brand me-3" href="#">GéoMap</a>
+  
+      <!-- Toggler pour petits écrans -->
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+  
+      <!-- Contenu collapsible -->
+      <div class="collapse navbar-collapse justify-content-start" id="navbarNav">
+        <ul class="navbar-nav">
+          <!-- Nav-item pour ouvrir le menu des points -->
+          <li class="nav-item">
+            <a
+              class="nav-link active"
+              href="#"
+              role="button"
+              data-bs-toggle="offcanvas"
+              data-bs-target="#sidebar"
+              aria-controls="sidebar"
+            >
+              Gestion des points
+            </a>
+          </li>
+  
+          <!-- Nav-item Importer/Exporter -->
+          <li class="nav-item">
+            <a
+              class="nav-link active"
+              href="#"
+              data-bs-toggle="modal"
+              data-bs-target="#importExportModal"
+            >
+              Importer/Exporter
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+  
+  
 
   <!-- Sidebar Offcanvas (Bootstrap) -->
   <div
@@ -95,52 +138,70 @@
       </form>
 
       <!-- Section rétractable "Liste des points" -->
-      <div class="mb-3">
-        <button
-          class="btn btn-outline-secondary w-100"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#collapse-list"
-          aria-expanded="false"
-          aria-controls="collapse-list"
-        >
-          Liste des points
-        </button>
-        <div class="collapse mt-2" id="collapse-list">
-          <ul id="point-list" class="list-group"></ul>
+      <div class="accordion" id="pointsAccordion">
+        <div class="accordion-item mb-2">
+          <h2 class="accordion-header" id="headingList">
+            <button
+              class="accordion-button"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapseList"
+              aria-expanded="true"
+              aria-controls="collapseList"
+            >
+              Liste des points
+            </button>
+          </h2>
+          <div
+            id="collapseList"
+            class="accordion-collapse collapse show"
+            aria-labelledby="headingList"
+          >
+            <div class="accordion-body p-0">
+              <ul id="point-list" class="list-group list-group-flush"></ul>
+            </div>
+          </div>
+        </div>
+      
+        <div class="accordion-item mb-2">
+          <h2 class="accordion-header" id="headingConnect">
+            <button
+              class="accordion-button"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapseConnect"
+              aria-expanded="true"
+              aria-controls="collapseConnect"
+            >
+              Relier deux points
+            </button>
+          </h2>
+          <div
+            id="collapseConnect"
+            class="accordion-collapse collapse show"
+            aria-labelledby="headingConnect"
+          >
+            <div class="accordion-body">
+              <div class="mb-3">
+                <label for="select-point1" class="form-label">Point A :</label>
+                <select id="select-point1" class="form-select">
+                  <option value="" selected disabled>Choisir...</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="select-point2" class="form-label">Point B :</label>
+                <select id="select-point2" class="form-select">
+                  <option value="" selected disabled>Choisir...</option>
+                </select>
+              </div>
+              <button id="connect-btn" class="btn btn-primary w-100">
+                Relier
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-
-      <!-- Section rétractable "Relier deux points" -->
-      <div class="mb-3">
-        <button
-          class="btn btn-outline-secondary w-100"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#collapse-connect"
-          aria-expanded="false"
-          aria-controls="collapse-connect"
-        >
-          Relier deux points
-        </button>
-        <div class="collapse mt-2" id="collapse-connect">
-          <div class="mb-3">
-            <label for="select-point1" class="form-label">Point A :</label>
-            <select id="select-point1" class="form-select">
-              <option value="" selected disabled>Choisir...</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label for="select-point2" class="form-label">Point B :</label>
-            <select id="select-point2" class="form-select">
-              <option value="" selected disabled>Choisir...</option>
-            </select>
-          </div>
-          <button id="connect-btn" class="btn btn-primary w-100">
-            Relier
-          </button>
-        </div>
-      </div>
+      
     </div>
   </div>
 
@@ -226,6 +287,52 @@
             <button type="submit" class="btn btn-primary">Enregistrer</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="modal fade"
+    id="importExportModal"
+    tabindex="-1"
+    aria-labelledby="importExportLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="importExportLabel">
+            Importer / Exporter les données
+          </h5>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="Fermer"
+          ></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3 d-flex align-items-start">
+            <button id="export-btn" class="btn btn-success me-2" disabled>
+              Copier dans le presse-papier
+            </button>
+            <button id="clear-area-btn" class="btn btn-secondary me-2">
+              Effacer la zone
+            </button>
+            
+          </div>
+          <textarea
+              id="import-export-area"
+              class="form-control flex-grow-1"
+              rows="8"
+              placeholder="Coller vos données au format JSON pour les importer…"
+            ></textarea>
+
+          <button id="import-btn" class="mt-3 btn btn-primary" disabled>
+            Importer depuis la zone de texte
+          </button>
+          <div id="import-feedback" class="mt-2"></div>
+        </div>
       </div>
     </div>
   </div>

@@ -1,8 +1,13 @@
 /* Hauteur de la carte pour occuper tout l’écran */
 #map {
-    height: 100vh;
+  height: calc(100vh - 56px);
     width: 100%;
   }
+
+  body {
+    padding-top: 56px;
+  }
+  
   
   /* Petite icône carrée pour afficher la couleur dans la liste */
   .color-box {

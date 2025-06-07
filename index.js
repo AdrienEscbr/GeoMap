@@ -115,6 +115,25 @@ function loadFromLocalStorage() {
 // FIN FONCTIONS DE PERSISTENCE
 // ---------------------------------------------
 
+// Replie le menu si on clique ailleur que dessus
+
+// Récupère l’élément collapse et son instance Bootstrap
+const navbarCollapseEl = document.getElementById('navbarNav');
+const bsNavbarCollapse = new bootstrap.Collapse(navbarCollapseEl, { toggle: false });
+
+// Lorsque n’importe où sur le document est cliqué…
+document.addEventListener('click', (e) => {
+  // Si le menu est ouvert…
+  if (navbarCollapseEl.classList.contains('show')) {
+    // …et que le clic n’a pas eu lieu DANS la navbar
+    const clickedInside = e.target.closest('.navbar');
+    if (!clickedInside) {
+      bsNavbarCollapse.hide();
+    }
+  }
+});
+
+
 // Initialisation de Sortable pour la liste
 Sortable.create(pointListEl, {
   handle: '.drag-handle',
@@ -459,3 +478,125 @@ connectBtn.setAttribute('disabled', 'true');
 // ---------------------------------------------
 loadFromLocalStorage();
 renderPointList();
+
+
+// ------------------------
+// Import/Export JSON
+// ------------------------
+
+const exportBtn = document.getElementById('export-btn');
+const importBtn = document.getElementById('import-btn');
+const ioArea = document.getElementById('import-export-area');
+const ioFeedback = document.getElementById('import-feedback');
+const clearAreaBtn = document.getElementById('clear-area-btn');
+
+// Au chargement du modal, on active/désactive le bouton Export
+const importExportModalEl = document.getElementById('importExportModal');
+importExportModalEl.addEventListener('show.bs.modal', () => {
+  // S'il n'y a pas de données sauvegardées, on garde Export désactivé
+  const hasData = !!localStorage.getItem('mapPoints');
+  exportBtn.disabled = !hasData;
+  // Reset feedback et textarea
+  ioArea.value = '';
+  ioFeedback.innerHTML = '';
+  importBtn.disabled = true;
+});
+
+// Lorsque la textarea change, on active/désactive Import
+ioArea.addEventListener('input', () => {
+  importBtn.disabled = ioArea.value.trim() === '';
+});
+
+// Effacer la textarea
+clearAreaBtn.addEventListener('click', () => {
+  ioArea.value = '';
+  ioFeedback.innerHTML = '';
+  importBtn.disabled = true;
+});
+
+
+/** Génére l’objet à exporter, sérialise et affiche dans la textarea */
+exportBtn.addEventListener('click', () => {
+  const data = {
+    points: points.map(p => ({
+      id: p.id, desc: p.desc, lat: p.lat, lng: p.lng, color: p.color
+    })),
+    lines: polylines.map(l => ({ id1: l.id1, id2: l.id2 }))
+  };
+  const json = JSON.stringify(data, null, 2);
+  ioArea.value = json;
+  navigator.clipboard.writeText(json)
+    .then(() => {
+      ioFeedback.innerHTML = '<div class="text-success">Données copiées !</div>';
+    })
+    .catch(() => {
+      ioFeedback.innerHTML = '<div class="text-danger">Échec copie.</div>';
+    });
+  // On peut importer immédiatement après export
+  importBtn.disabled = false;
+});
+
+/** Importe les données depuis la textarea sans écraser l’existant */
+importBtn.addEventListener('click', () => {
+  ioFeedback.innerHTML = '';
+  let data;
+  try {
+    data = JSON.parse(ioArea.value);
+  } catch {
+    ioFeedback.innerHTML = '<div class="text-danger">JSON invalide.</div>';
+    return;
+  }
+  if (!data.points || !Array.isArray(data.points) ||
+      !data.lines || !Array.isArray(data.lines)) {
+    ioFeedback.innerHTML = '<div class="text-danger">Format attendu : { points: […], lines: […] }.</div>';
+    return;
+  }
+
+  // Importer les points uniques
+  let added = 0;
+  data.points.forEach(pt => {
+    if (
+      typeof pt.id === 'number' &&
+      typeof pt.desc === 'string' &&
+      typeof pt.lat === 'number' &&
+      typeof pt.lng === 'number' &&
+      typeof pt.color === 'string' &&
+      !points.some(existing => existing.id === pt.id)
+    ) {
+      // recréer marker
+      const marker = L.circleMarker([pt.lat, pt.lng], {
+        radius: 8, fillColor: pt.color, color: '#000', weight: 1, fillOpacity: 0.9
+      }).addTo(map)
+        .bindPopup(`<strong>${pt.desc}</strong><br>(${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)})`);
+      points.push({ id: pt.id, desc: pt.desc, lat: pt.lat, lng: pt.lng, color: pt.color, marker });
+      added++;
+      nextId = Math.max(nextId, pt.id + 1);
+    }
+  });
+
+  // Importer les lignes uniques
+  let addedLines = 0;
+  data.lines.forEach(ln => {
+    if (
+      typeof ln.id1 === 'number' &&
+      typeof ln.id2 === 'number' &&
+      !polylines.some(e => (e.id1 === ln.id1 && e.id2 === ln.id2) || (e.id1 === ln.id2 && e.id2 === ln.id1))
+    ) {
+      const p1 = points.find(p => p.id === ln.id1);
+      const p2 = points.find(p => p.id === ln.id2);
+      if (p1 && p2) {
+        const line = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], { color: '#0000FF', weight: 3 })
+          .addTo(map);
+        polylines.push({ id1: ln.id1, id2: ln.id2, line });
+        addedLines++;
+      }
+    }
+  });
+
+  // Régénérer la liste et sauvegarder
+  renderPointList();
+  saveToLocalStorage();
+
+  ioFeedback.innerHTML =
+    `<div class="text-success">${added} point(s) et ${addedLines} tracé(s) ajoutés.</div>`;
+});
