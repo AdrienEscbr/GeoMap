@@ -1,13 +1,28 @@
 /* Hauteur de la carte pour occuper tout l’écran */
-#map {
+/* #map {
   height: calc(100vh - 56px);
     width: 100%;
+  } */
+
+  /* body {
+    padding-top: 56px;
+  } */
+  
+  html, body {
+    height: 100%; /* Assure que le body occupe tout l'écran */
+    margin: 0;
+    
   }
 
-  body {
-    padding-top: 56px;
+  #map {
+    height: 100%; /* Permet à la carte de prendre toute la hauteur de son conteneur */
+    width: 100%; /* Optionnel, mais utile pour éviter des débordements */
   }
-  
+
+  main {
+    flex-grow: 1; /* Fait grandir le contenu principal pour occuper tout l'espace disponible */
+    display: flex; /* Permet de gérer des enfants comme #map */
+  }
   
   /* Petite icône carrée pour afficher la couleur dans la liste */
   .color-box {

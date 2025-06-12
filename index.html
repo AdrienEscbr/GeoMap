@@ -41,7 +41,7 @@
   <!-- Notre propre fichier CSS -->
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="d-flex flex-column min-vh-100">
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
     <div class="container-fluid">
@@ -227,7 +227,10 @@
   </div>
 
   <!-- La carte Leaflet -->
-  <div id="map"></div>
+  <!-- Contenu principal -->
+  <main class="flex-grow-1 d-flex">
+    <div id="map" class="w-100" aria-label="Carte interactive pour gérer les points géographiques"></div>
+  </main>
 
   <!-- Modal Bootstrap pour modifier un point -->
   <div

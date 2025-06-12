@@ -1,5 +1,5 @@
 // Initialisation de la carte Leaflet
-const map = L.map('map').setView([48.8566, 2.3522], 2);
+const map = L.map('map',{zoomControl: false}).setView([48.8566, 2.3522], 2);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
