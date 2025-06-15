@@ -449,6 +449,10 @@ connectBtn.addEventListener('click', () => {
   // Conserver la ligne avec les IDs
   polylines.push({ id1, id2, line });
 
+  line.on('click', function () {
+    showDeleteLineModal(line);
+  });
+
   // Sauvegarder l’état
   saveToLocalStorage();
 
@@ -600,3 +604,39 @@ importBtn.addEventListener('click', () => {
   ioFeedback.innerHTML =
     `<div class="text-success">${added} point(s) et ${addedLines} tracé(s) ajoutés.</div>`;
 });
+
+polylines.forEach((entry) => {
+  entry.line.on('click', function () {
+    showDeleteLineModal(entry.line);
+  });
+});
+
+function showDeleteLineModal(ligne) {
+  // Ouvre le modal
+  const modal = new bootstrap.Modal(document.getElementById('modalSuppression'));
+  modal.show();
+
+  // Ajout de l'événement de suppression
+  document.getElementById('btnSupprimer').onclick = function () {
+      supprimerLigne(ligne);
+      // Mets à jour la liste des polylines
+      polylines = polylines.filter(entry => entry.line !== ligne);
+      modal.hide();
+  };
+}
+
+function supprimerLigne(ligne) {
+  // Retirer la ligne de la carte
+  map.removeLayer(ligne);
+
+  // Retirer la ligne de localStorage
+  const updatedPolylines = polylines.filter(entry => entry.line !== ligne);
+  const polylinesData = updatedPolylines.map(entry => ({
+    id1: entry.id1,
+    id2: entry.id2,
+  }));
+  localStorage.setItem('mapPolylines', JSON.stringify(polylinesData));
+
+  // Mettre à jour le tableau des polylines
+  polylines = updatedPolylines;
+}

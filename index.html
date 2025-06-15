@@ -315,6 +315,27 @@
     </div>
   </div>
 
+  <!-- Modal pour la confirmation de suppression -->
+  <div class="modal fade" id="modalSuppression" tabindex="-1" aria-labelledby="modalSuppressionLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalSuppressionLabel">Supprimer une ligne</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p id="infoLigne">Voulez-vous vraiment supprimer cette ligne ?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+          <button type="button" id="btnSupprimer" class="btn btn-danger">Supprimer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+
+
   <div
     class="modal fade"
     id="importExportModal"
