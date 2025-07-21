@@ -11,6 +11,9 @@ let nextId = 1;  // Pour générer un identifiant unique (sera recalculé au cha
 let polylines = []; 
 // Chaque entrée : { id1, id2, line: L.polyline }
 
+const distanceLabels = new Map(); // Clé = ligne Leaflet, valeur = label ajouté sur la carte
+
+
 // Variable qui conserve la dernière couleur utilisée
 let lastColor = '#3388ff';
 
@@ -19,6 +22,7 @@ const select1 = document.getElementById('select-point1');
 const select2 = document.getElementById('select-point2');
 const connectBtn = document.getElementById('connect-btn');
 const coordFeedback = document.getElementById('coord-feedback');
+const distanceButton = document.getElementById('toggle-measure');
 
 // ---------------------------------------------
 // FONCTIONS DE PERSISTENCE (localStorage)
@@ -64,11 +68,7 @@ function loadFromLocalStorage() {
           fillOpacity: 0.9,
         })
           .addTo(map)
-          .bindPopup(
-            `<strong>${pdata.desc}</strong><br>(${pdata.lat.toFixed(
-              5
-            )}, ${pdata.lng.toFixed(5)})`
-          );
+          .bindPopup(popupContent(pdata.desc, pdata.lat.toFixed(5), pdata.lng.toFixed(5)));
 
         points.push({
           id: pdata.id,
@@ -101,6 +101,10 @@ function loadFromLocalStorage() {
             { color: '#0000FF', weight: 3 }
           ).addTo(map);
           polylines.push({ id1: ldata.id1, id2: ldata.id2, line: line });
+
+          if(distanceButton.checked){
+            afficherDistanceLigne(line)
+          }
         }
       });
     } catch (e) {
@@ -298,7 +302,7 @@ document.getElementById('add-point-form').addEventListener('submit', (e) => {
     fillOpacity: 0.9,
   })
     .addTo(map)
-    .bindPopup(`<strong>${desc}</strong><br>(${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+    .bindPopup(popupContent(desc, lat.toFixed(5), lng.toFixed(5)));
 
   // Ajouter au tableau interne
   const newPoint = {
@@ -322,6 +326,28 @@ document.getElementById('add-point-form').addEventListener('submit', (e) => {
     renderPointList();
   }, 100);
 });
+
+function popupContent(description, lat, long){
+
+  const popupContent = `
+  <div>
+    <strong>${description}</strong>
+    <br />
+    (${lat}, ${long})
+  </div>
+  `;
+  return popupContent;
+}
+
+{/* <br />
+<button class="popup-icon-btn" onclick="handlePopupButtonClick('${description}')">
+  <img src="./circle.png" alt="Action" />
+</button> */}
+
+function handlePopupButtonClick(description) {
+  console.log(`Action sur le point : ${description}`);
+}
+
 
 // Supprimer un point
 function deletePoint(id) {
@@ -411,6 +437,9 @@ document.getElementById('edit-point-form').addEventListener('submit', (e) => {
           { color: '#0000FF', weight: 3 }
         ).addTo(map);
         entry.line = newLine;
+        if(distanceButton.checked){
+          afficherDistanceLigne(newLine)
+        }
       } else {
         // Si l’autre point n’existe plus, tout enlever
         polylines.splice(index, 1);
@@ -445,6 +474,11 @@ connectBtn.addEventListener('click', () => {
     ],
     { color: '#0000FF', weight: 3 }
   ).addTo(map);
+
+  if(distanceButton.checked){
+    afficherDistanceLigne(line)
+  }
+  
 
   // Conserver la ligne avec les IDs
   polylines.push({ id1, id2, line });
@@ -571,7 +605,7 @@ importBtn.addEventListener('click', () => {
       const marker = L.circleMarker([pt.lat, pt.lng], {
         radius: 8, fillColor: pt.color, color: '#000', weight: 1, fillOpacity: 0.9
       }).addTo(map)
-        .bindPopup(`<strong>${pt.desc}</strong><br>(${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)})`);
+        .bindPopup(popupContent(pt.desc, pt.lat.toFixed(5), pt.lng.toFixed(5)));
       points.push({ id: pt.id, desc: pt.desc, lat: pt.lat, lng: pt.lng, color: pt.color, marker });
       added++;
       nextId = Math.max(nextId, pt.id + 1);
@@ -593,6 +627,9 @@ importBtn.addEventListener('click', () => {
           .addTo(map);
         polylines.push({ id1: ln.id1, id2: ln.id2, line });
         addedLines++;
+        if(distanceButton.checked){
+          afficherDistanceLigne(line)
+        }        
       }
     }
   });
@@ -629,6 +666,11 @@ function supprimerLigne(ligne) {
   // Retirer la ligne de la carte
   map.removeLayer(ligne);
 
+  if (distanceLabels.has(ligne)) {
+    map.removeLayer(distanceLabels.get(ligne));
+    distanceLabels.delete(ligne);
+  }
+
   // Retirer la ligne de localStorage
   const updatedPolylines = polylines.filter(entry => entry.line !== ligne);
   const polylinesData = updatedPolylines.map(entry => ({
@@ -640,3 +682,64 @@ function supprimerLigne(ligne) {
   // Mettre à jour le tableau des polylines
   polylines = updatedPolylines;
 }
+
+
+function afficherDistanceLigne(line) {
+  const latlngs = line.getLatLngs();
+  if (latlngs.length !== 2) return;
+
+  const midLat = (latlngs[0].lat + latlngs[1].lat) / 2;
+  const midLng = (latlngs[0].lng + latlngs[1].lng) / 2;
+  const midPoint = L.latLng(midLat, midLng);
+
+  const distance = latlngs[0].distanceTo(latlngs[1]);
+
+  label = createDistanceLabel(`${distance.toFixed(0)} m`, midPoint)
+
+  distanceLabels.set(line, label);
+}
+
+function masquerToutesLesDistances() {
+  distanceLabels.forEach((label, line) => {
+    map.removeLayer(label);
+  });
+}
+
+function createDistanceLabel(text, latlng) {
+  // Créer un élément temporaire pour mesurer
+  const tempDiv = document.createElement('div');
+  tempDiv.className = 'distance-label';
+  tempDiv.style.position = 'absolute';
+  tempDiv.style.visibility = 'hidden';
+  tempDiv.innerHTML = text;
+  document.body.appendChild(tempDiv);
+
+  // Obtenir la taille réelle du contenu
+  const width = tempDiv.offsetWidth;
+  const height = tempDiv.offsetHeight;
+  document.body.removeChild(tempDiv);
+
+  // Créer l'icône avec cette taille
+  const icon = L.divIcon({
+    className: 'distance-label',
+    html: text,
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height / 2], // centré
+  });
+
+  return L.marker(latlng, {
+    icon,
+    interactive: false,
+  }).addTo(map);
+}
+
+
+distanceButton.addEventListener('change', function () {
+  if (this.checked) {    
+    polylines.forEach(entry => {
+        afficherDistanceLigne(entry.line);
+    });
+  } else {
+    masquerToutesLesDistances();
+  }
+});
