@@ -93,4 +93,6 @@
     object-fit: contain;
   }
   
-  
+  #circle-config-panel input[type="number"] {
+    width: 100%;
+  }
