@@ -9,6 +9,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 let points = []; // Chaque élément : { id, desc, lat, lng, color, marker }
 let nextId = 1;  // Pour générer un identifiant unique (sera recalculé au chargement)
 let polylines = []; 
+let circles = []; // tableau des cercles {circle, lat, lng, radius, color}
+let currentEditableCircle = null;
 // Chaque entrée : { id1, id2, line: L.polyline }
 
 const distanceLabels = new Map(); // Clé = ligne Leaflet, valeur = label ajouté sur la carte
@@ -114,6 +116,8 @@ function loadFromLocalStorage() {
       );
     }
   }
+
+  loadCirclesFromLocalStorage();
 }
 // ---------------------------------------------
 // FIN FONCTIONS DE PERSISTENCE
@@ -334,18 +338,111 @@ function popupContent(description, lat, long){
     <strong>${description}</strong>
     <br />
     (${lat}, ${long})
+    <br /><br />
+    <div class="d-flex flex-row align-items-center justify-content-center">
+      <button class="popup-icon-btn" onclick="handlePopupButtonClick('${description}')">
+        <img src="./circle.png" alt="Action" />
+      </button>
+      <p class="m-0 p-0 ms-2">Dessiner un cercle</p>
+    </div>
   </div>
   `;
   return popupContent;
 }
 
-{/* <br />
-<button class="popup-icon-btn" onclick="handlePopupButtonClick('${description}')">
-  <img src="./circle.png" alt="Action" />
-</button> */}
 
 function handlePopupButtonClick(description) {
-  console.log(`Action sur le point : ${description}`);
+  const point = points.find(p => p.desc === description);
+  
+  if (!point) return;
+  const lat = point.lat;
+  const lng = point.lng;
+
+  const circle = L.circle([lat, lng], {
+    radius: 1000,
+    color: '#ff0000',
+    fillOpacity: 0.3,
+  }).addTo(map);
+
+  circles.push({ circle, lat, lng, radius: 1000, color: '#ff0000' });
+  saveCirclesToLocalStorage();
+  attachCircleEvent(circle);
+
+  showCircleConfigPanel(circle);
+}
+
+function attachCircleEvent(circle) {
+  circle.on('click', function () {
+    showCircleConfigPanel(circle);
+  });
+}
+
+function showCircleConfigPanel(circle) {
+  currentEditableCircle = circle;
+  document.getElementById('circle-config-panel').classList.remove('d-none');
+
+  document.getElementById('circle-radius').value = circle.getRadius();
+  document.getElementById('circle-color').value = circle.options.color;
+}
+
+// Valider les modifications
+document.getElementById('circle-validate-btn').addEventListener('click', () => {
+  if (!currentEditableCircle) return;
+
+  const newRadius = parseFloat(document.getElementById('circle-radius').value);
+  const newColor = document.getElementById('circle-color').value;
+
+  currentEditableCircle.setRadius(newRadius);
+  currentEditableCircle.setStyle({ color: newColor });
+
+  updateCircleInStorage(currentEditableCircle, newRadius, newColor);
+  document.getElementById('circle-config-panel').classList.add('d-none');
+});
+
+// Supprimer le cercle
+document.getElementById('circle-delete-btn').addEventListener('click', () => {
+  if (!currentEditableCircle) return;
+
+  map.removeLayer(currentEditableCircle);
+  circles = circles.filter(obj => obj.circle !== currentEditableCircle);
+  saveCirclesToLocalStorage();
+
+  document.getElementById('circle-config-panel').classList.add('d-none');
+  currentEditableCircle = null;
+});
+
+// Sauvegarde des cercles
+function saveCirclesToLocalStorage() {
+  const stored = circles.map(({ circle, lat, lng, radius, color }) => ({
+    lat, lng, radius, color
+  }));
+  localStorage.setItem('circles', JSON.stringify(stored));
+}
+
+// Mise à jour d’un cercle dans le stockage
+function updateCircleInStorage(circle, newRadius, newColor) {
+  for (let c of circles) {
+    if (c.circle === circle) {
+      c.radius = newRadius;
+      c.color = newColor;
+      break;
+    }
+  }
+  saveCirclesToLocalStorage();
+}
+
+// Chargement au démarrage
+function loadCirclesFromLocalStorage() {
+  const stored = JSON.parse(localStorage.getItem('circles')) || [];
+  for (let data of stored) {
+    const circle = L.circle([data.lat, data.lng], {
+      radius: data.radius,
+      color: data.color,
+      fillOpacity: 0.3,
+    }).addTo(map);
+    attachCircleEvent(circle);
+    circles.push({ circle, ...data });
+  }
 }
 
 
@@ -559,7 +656,13 @@ exportBtn.addEventListener('click', () => {
     points: points.map(p => ({
       id: p.id, desc: p.desc, lat: p.lat, lng: p.lng, color: p.color
     })),
-    lines: polylines.map(l => ({ id1: l.id1, id2: l.id2 }))
+    lines: polylines.map(l => ({ id1: l.id1, id2: l.id2 })),
+    circles: circles.map(c => ({
+      lat: c.lat,
+      lng: c.lng,
+      radius: c.radius,
+      color: c.color
+    }))
   };
   const json = JSON.stringify(data, null, 2);
   ioArea.value = json;
@@ -634,12 +737,42 @@ importBtn.addEventListener('click', () => {
     }
   });
 
+  // Importer les cercles
+  let addedCircles = 0;
+  if (Array.isArray(data.circles)) {
+    data.circles.forEach(c => {
+      if (
+        typeof c.lat === 'number' &&
+        typeof c.lng === 'number' &&
+        typeof c.radius === 'number' &&
+        typeof c.color === 'string'
+      ) {
+        const circle = L.circle([c.lat, c.lng], {
+          radius: c.radius,
+          color: c.color,
+          fillOpacity: 0.3
+        }).addTo(map);
+        attachCircleEvent(circle); // pour permettre de configurer en cliquant dessus
+        circles.push({
+          circle,
+          lat: c.lat,
+          lng: c.lng,
+          radius: c.radius,
+          color: c.color
+        });
+        addedCircles++;
+      }
+    });
+    saveCirclesToLocalStorage(); // mettre à jour le stockage
+  }
+
+
   // Régénérer la liste et sauvegarder
   renderPointList();
   saveToLocalStorage();
 
   ioFeedback.innerHTML =
-    `<div class="text-success">${added} point(s) et ${addedLines} tracé(s) ajoutés.</div>`;
+    `<div class="text-success">${added} point(s) et ${addedLines} tracé(s) et ${addedCircles} cercle(s) ajoutés.</div>`;
 });
 
 polylines.forEach((entry) => {
