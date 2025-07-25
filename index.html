@@ -240,6 +240,24 @@
     <div id="map" class="w-100" aria-label="Carte interactive pour gérer les points géographiques"></div>
   </main>
 
+  <!-- Menu Overlay de configuration de cercle -->
+  <div id="circle-config-panel" class="card p-3 position-absolute top-5 end-0 m-3 d-none" style="z-index: 1000; width: 250px;">
+    <h6>Configurer le cercle</h6>
+    <div class="mb-2">
+      <label for="circle-radius" class="form-label">Rayon (m)</label>
+      <input type="number" id="circle-radius" class="form-control" min="10" />
+    </div>
+    <div class="mb-2">
+      <label for="circle-color" class="form-label">Couleur</label>
+      <input type="color" id="circle-color" class="form-control form-control-color" />
+    </div>
+    <div class="d-flex justify-content-between">
+      <button id="circle-validate-btn" class="btn btn-success btn-sm">Valider</button>
+      <button id="circle-delete-btn" class="btn btn-danger btn-sm">Supprimer</button>
+    </div>
+  </div>
+
+
   <!-- Modal Bootstrap pour modifier un point -->
   <div
     class="modal fade"
