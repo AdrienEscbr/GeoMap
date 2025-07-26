@@ -241,7 +241,7 @@
   </main>
 
   <!-- Menu Overlay de configuration de cercle -->
-  <div id="circle-config-panel" class="card p-3 position-absolute top-5 end-0 m-3 d-none" style="z-index: 1000; width: 250px;">
+  <div id="circle-config-panel" class="config-panel card p-3 position-absolute end-0 m-3 d-none" style="z-index: 1000; width: 250px;">
     <h6>Configurer le cercle</h6>
     <div class="mb-2">
       <label for="circle-radius" class="form-label">Rayon (m)</label>
@@ -254,6 +254,23 @@
     <div class="d-flex justify-content-between">
       <button id="circle-validate-btn" class="btn btn-success btn-sm">Valider</button>
       <button id="circle-delete-btn" class="btn btn-danger btn-sm">Supprimer</button>
+    </div>
+  </div>
+
+  <!-- Menu Overlay de configuration de ligne -->
+  <div id="line-config-panel" class="config-panel card p-3 position-absolute end-0 m-3 d-none" style="z-index: 1000; width: 250px;">
+    <h6>Configurer la ligne</h6>
+    <div class="mb-2">
+      <label for="line-width" class="form-label">Distance (m)</label>
+      <div class="d-flex justify-content-center align-items-center gap-1 p-0 m-0">
+        <input type="number" id="line-width" class="form-control" min="10" readonly/>
+
+        <button id="line-edit-btn" class="btn btn-primary btn-sm m-0">Éditer</button>
+      </div>
+    </div>
+    <div class="d-flex justify-content-between mt-2">
+      <button id="line-delete-btn" class="btn btn-danger btn-sm">Supprimer</button>
+      <button id="line-close-btn" class="btn btn-success btn-sm">Fermer</button>
     </div>
   </div>
 
@@ -407,6 +424,31 @@
       </div>
     </div>
   </div>
+
+  <div class="modal fade" id="createPointModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Créer un point</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="text" id="pointDesc" class="form-control mb-2" placeholder="Nom du point">
+          <input type="color" id="pointColor" class="form-control form-control-color" value="#ff0000">
+          <!-- <div class="mb-3">
+            <label for="custom-length" class="form-label">Distance (m)</label>
+            <input type="number" class="form-control" id="custom-length" min="1" />
+          </div> -->
+
+        </div>
+        <div class="modal-footer">
+          <button id="cancelPointBtn" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+          <button id="validatePointBtn" class="btn btn-primary">Valider</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- Footer -->
   <footer class="bg-light text-center py-3 mt-auto pb-0">
