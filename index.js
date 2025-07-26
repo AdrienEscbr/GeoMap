@@ -11,6 +11,10 @@ let nextId = 1;  // Pour générer un identifiant unique (sera recalculé au cha
 let polylines = []; 
 let circles = []; // tableau des cercles {circle, lat, lng, radius, color}
 let currentEditableCircle = null;
+let currentSelectedLine = null;
+
+let editHandles = [];
+let originalLatLngs = [];
 // Chaque entrée : { id1, id2, line: L.polyline }
 
 const distanceLabels = new Map(); // Clé = ligne Leaflet, valeur = label ajouté sur la carte
@@ -25,6 +29,17 @@ const select2 = document.getElementById('select-point2');
 const connectBtn = document.getElementById('connect-btn');
 const coordFeedback = document.getElementById('coord-feedback');
 const distanceButton = document.getElementById('toggle-measure');
+const circleConfigPanel = document.getElementById('circle-config-panel');
+
+const lineConfigPanel = document.getElementById('line-config-panel');
+const lineDistanceInput = document.getElementById('line-width');
+const lineDeleteBtn = document.getElementById('line-delete-btn');
+const lineCloseBtn = document.getElementById('line-close-btn');
+
+function closeAllConfigMenus(){
+  lineConfigPanel.classList.add('d-none');
+  circleConfigPanel.classList.add('d-none');
+}
 
 // ---------------------------------------------
 // FONCTIONS DE PERSISTENCE (localStorage)
@@ -378,8 +393,10 @@ function attachCircleEvent(circle) {
 }
 
 function showCircleConfigPanel(circle) {
+  closeAllConfigMenus();
+
   currentEditableCircle = circle;
-  document.getElementById('circle-config-panel').classList.remove('d-none');
+  circleConfigPanel.classList.remove('d-none');
 
   document.getElementById('circle-radius').value = circle.getRadius();
   document.getElementById('circle-color').value = circle.options.color;
@@ -396,7 +413,7 @@ document.getElementById('circle-validate-btn').addEventListener('click', () => {
   currentEditableCircle.setStyle({ color: newColor });
 
   updateCircleInStorage(currentEditableCircle, newRadius, newColor);
-  document.getElementById('circle-config-panel').classList.add('d-none');
+  circleConfigPanel.classList.add('d-none');
 });
 
 // Supprimer le cercle
@@ -407,7 +424,7 @@ document.getElementById('circle-delete-btn').addEventListener('click', () => {
   circles = circles.filter(obj => obj.circle !== currentEditableCircle);
   saveCirclesToLocalStorage();
 
-  document.getElementById('circle-config-panel').classList.add('d-none');
+  circleConfigPanel.classList.add('d-none');
   currentEditableCircle = null;
 });
 
@@ -581,7 +598,8 @@ connectBtn.addEventListener('click', () => {
   polylines.push({ id1, id2, line });
 
   line.on('click', function () {
-    showDeleteLineModal(line);
+    // showDeleteLineModal(line);
+    showLineConfigPanel(line);
   });
 
   // Sauvegarder l’état
@@ -775,9 +793,51 @@ importBtn.addEventListener('click', () => {
     `<div class="text-success">${added} point(s) et ${addedLines} tracé(s) et ${addedCircles} cercle(s) ajoutés.</div>`;
 });
 
+
+lineCloseBtn.addEventListener('click', () => {
+  currentSelectedLine = null;
+  lineConfigPanel.classList.add('d-none');
+});
+
+lineDeleteBtn.addEventListener('click', () => {
+  if (!currentSelectedLine) return;
+
+  // Retirer du tableau
+  const index = polylines.findIndex(e => e.line === currentSelectedLine);
+  if (index !== -1) {
+    // Retirer du localStorage
+    polylines.splice(index, 1);
+    saveToLocalStorage(); // <- Mets à jour ici
+  }
+
+  // Retirer de la carte
+  map.removeLayer(currentSelectedLine);
+
+  // Fermer panneau
+  currentSelectedLine = null;
+  lineConfigPanel.classList.add('d-none');
+});
+
+function showLineConfigPanel(line) {
+  closeAllConfigMenus();
+
+  const latlngs = line.getLatLngs();
+  if (latlngs.length !== 2) return;
+
+  const dist = calculateDistance(line);
+  lineDistanceInput.value = Math.round(dist);
+
+  currentSelectedLine = line;
+  lineConfigPanel.classList.remove('d-none');
+}
+
+
+
+
 polylines.forEach((entry) => {
   entry.line.on('click', function () {
-    showDeleteLineModal(entry.line);
+    // showDeleteLineModal(entry.line);
+    showLineConfigPanel(entry.line);
   });
 });
 
@@ -816,6 +876,177 @@ function supprimerLigne(ligne) {
   polylines = updatedPolylines;
 }
 
+document.getElementById('line-edit-btn').addEventListener('click', () => {
+  if (!currentSelectedLine) return;
+
+  const latlngs = currentSelectedLine.getLatLngs();
+  originalLatLngs = [...latlngs];
+
+  editHandles.forEach(h => map.removeLayer(h));
+  editHandles = [];
+
+  latlngs.forEach((latlng, idx) => {
+    const handle = L.circleMarker(latlng, {
+      radius: 6,
+      color: '#ff0000',
+      weight: 2,
+      fillColor: '#fff',
+      fillOpacity: 1,
+      draggable: true
+    }).addTo(map);
+
+    // Permet le drag manuellement (Leaflet ne le supporte pas nativement sur circleMarker)
+    makeHandleDraggable(handle, idx);
+    editHandles.push(handle);
+  });
+});
+
+function makeHandleDraggable(handle, handleIndex) {
+  let startPoint = null;
+  let otherEnd = null;
+
+  handle.on('mousedown', (e) => {
+    map.dragging.disable();
+    startPoint = e.latlng;
+    const latlngs = currentSelectedLine.getLatLngs();
+    otherEnd = latlngs[handleIndex === 0 ? 1 : 0];
+
+    map.on('mousemove', onDrag);
+    map.once('mouseup', onDrop);
+  });
+
+  function onDrag(e) {
+    const movedPoint = e.latlng;
+
+    // Calcule le vecteur original
+    const dx = otherEnd.lng - startPoint.lng;
+    const dy = otherEnd.lat - startPoint.lat;
+
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length === 0) return;
+
+    // Normalisation
+    const unitX = dx / length;
+    const unitY = dy / length;
+
+    // Projection du mouvement sur le vecteur
+    const proj = ((movedPoint.lng - otherEnd.lng) * unitX + (movedPoint.lat - otherEnd.lat) * unitY);
+
+    const newLat = otherEnd.lat + proj * unitY;
+    const newLng = otherEnd.lng + proj * unitX;
+    const newPoint = L.latLng(newLat, newLng);
+
+    const newLatLngs = handleIndex === 0 ? [newPoint, otherEnd] : [otherEnd, newPoint];
+    currentSelectedLine.setLatLngs(newLatLngs);
+    handle.setLatLng(newPoint);
+
+    // Mise à jour de l’autre handle
+    editHandles[handleIndex].setLatLng(newPoint);
+
+    // Affiche la nouvelle distance
+    const dist = map.distance(newLatLngs[0], newLatLngs[1]);
+    lineDistanceInput.value = Math.round(dist);
+  }
+
+  function onDrop(e) {
+    map.dragging.enable();
+    map.off('mousemove', onDrag);
+
+    const finalLatLngs = currentSelectedLine.getLatLngs();
+    const newCoord = finalLatLngs[handleIndex];
+
+    // Ouvre le modal de création de point
+    openPointCreationModal(newCoord, (confirmed, pointData) => {
+      if (confirmed) {
+        createAndAttachPoint(pointData, handleIndex);
+      } else {
+        // Annulé : restaurer
+        currentSelectedLine.setLatLngs(originalLatLngs);
+        renderDistanceIfEnabled();
+      }
+
+      // Nettoyer
+      editHandles.forEach(h => map.removeLayer(h));
+      editHandles = [];
+    });
+  }
+}
+
+function openPointCreationModal(coord, callback) {
+  const modal = new bootstrap.Modal(document.getElementById('createPointModal'));
+  modal.show();
+
+  document.getElementById('pointDesc').value = '';
+  document.getElementById('pointColor').value = '#ff0000';
+
+  document.getElementById('validatePointBtn').onclick = () => {
+    modal.hide();
+    callback(true, {
+      desc: document.getElementById('pointDesc').value,
+      color: document.getElementById('pointColor').value,
+      coord
+    });
+  };
+
+  document.getElementById('cancelPointBtn').onclick = () => {
+    callback(false);
+  };
+}
+
+function createAndAttachPoint({ desc, color, coord }, handleIndex) {
+  const id = nextId++;
+  const marker = L.circleMarker(coord, {
+    radius: 8,
+    fillColor: color,
+    color: '#000',
+    weight: 1,
+    fillOpacity: 0.9
+  }).addTo(map).bindPopup(popupContent(desc, coord.lat.toFixed(5), coord.lng.toFixed(5)));
+
+  points.push({ id, desc, lat: coord.lat, lng: coord.lng, color, marker });
+
+  // Mise à jour de la ligne
+  const otherEnd = currentSelectedLine.getLatLngs()[handleIndex === 0 ? 1 : 0];
+  const otherPoint = points.find(p => p.lat === otherEnd.lat && p.lng === otherEnd.lng);
+  if (!otherPoint) return;
+
+  // Supprimer la ligne actuelle du tableau polylines
+  const oldIndex = polylines.findIndex(e => e.line === currentSelectedLine);
+  if (oldIndex !== -1) {
+    supprimerLigne(polylines[oldIndex].line)
+    // map.removeLayer(polylines[oldIndex].line);
+    // polylines.splice(oldIndex, 1);
+  }
+
+  const newLine = L.polyline([coord, otherEnd], { color: '#0000FF', weight: 3 }).addTo(map);
+  newLine.on('click', () => showLineConfigPanel(newLine));
+  polylines.push({
+    id1: id,
+    id2: otherPoint.id,
+    line: newLine
+  });
+
+  // map.removeLayer(currentSelectedLine); // ancienne ligne supprimée
+
+  if (distanceButton.checked) {
+    afficherDistanceLigne(newLine);
+  }
+
+  currentSelectedLine = newLine;
+  renderPointList();
+  saveToLocalStorage();
+}
+
+
+
+function calculateDistance(line){
+  let distance = 0;
+  const latlngs = line.getLatLngs();
+  if (latlngs.length !== 2) return distance;
+
+  distance = latlngs[0].distanceTo(latlngs[1]);
+  return distance;
+}
 
 function afficherDistanceLigne(line) {
   const latlngs = line.getLatLngs();
