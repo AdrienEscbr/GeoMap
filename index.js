@@ -36,6 +36,12 @@ const lineDistanceInput = document.getElementById('line-width');
 const lineDeleteBtn = document.getElementById('line-delete-btn');
 const lineCloseBtn = document.getElementById('line-close-btn');
 
+const createPointBtn = document.getElementById('createPointModal');
+
+lineCloseBtn.addEventListener('click', () =>{
+  removeHandlers();
+})
+
 function closeAllConfigMenus(){
   lineConfigPanel.classList.add('d-none');
   circleConfigPanel.classList.add('d-none');
@@ -268,7 +274,11 @@ function renderPointList() {
     const btnDel = document.createElement('button');
     btnDel.className = 'btn btn-sm btn-danger';
     btnDel.textContent = 'Supprimer';
-    btnDel.addEventListener('click', () => deletePoint(p.id));
+    btnDel.addEventListener('click', () => {
+      deletePoint(p.id);
+      reloadDistanceLabels();
+      closeAllConfigMenus();
+    });
     li.appendChild(btnDel);
 
     pointListEl.appendChild(li);
@@ -355,10 +365,10 @@ function popupContent(description, lat, long){
     (${lat}, ${long})
     <br /><br />
     <div class="d-flex flex-row align-items-center justify-content-center">
-      <button class="popup-icon-btn" onclick="handlePopupButtonClick('${description}')">
+      <button class="popup-icon-btn w-100" onclick="handlePopupButtonClick('${description}')">
         <img src="./circle.png" alt="Action" />
-      </button>
-      <p class="m-0 p-0 ms-2">Dessiner un cercle</p>
+      
+      <p class="mx-2 p-0 ">Dessiner un cercle</p></button>
     </div>
   </div>
   `;
@@ -598,7 +608,6 @@ connectBtn.addEventListener('click', () => {
   polylines.push({ id1, id2, line });
 
   line.on('click', function () {
-    // showDeleteLineModal(line);
     showLineConfigPanel(line);
   });
 
@@ -813,6 +822,8 @@ lineDeleteBtn.addEventListener('click', () => {
   // Retirer de la carte
   map.removeLayer(currentSelectedLine);
 
+  reloadDistanceLabels();
+
   // Fermer panneau
   currentSelectedLine = null;
   lineConfigPanel.classList.add('d-none');
@@ -836,24 +847,10 @@ function showLineConfigPanel(line) {
 
 polylines.forEach((entry) => {
   entry.line.on('click', function () {
-    // showDeleteLineModal(entry.line);
     showLineConfigPanel(entry.line);
   });
 });
 
-function showDeleteLineModal(ligne) {
-  // Ouvre le modal
-  const modal = new bootstrap.Modal(document.getElementById('modalSuppression'));
-  modal.show();
-
-  // Ajout de l'événement de suppression
-  document.getElementById('btnSupprimer').onclick = function () {
-      supprimerLigne(ligne);
-      // Mets à jour la liste des polylines
-      polylines = polylines.filter(entry => entry.line !== ligne);
-      modal.hide();
-  };
-}
 
 function supprimerLigne(ligne) {
   // Retirer la ligne de la carte
@@ -962,7 +959,6 @@ function makeHandleDraggable(handle, handleIndex) {
       } else {
         // Annulé : restaurer
         currentSelectedLine.setLatLngs(originalLatLngs);
-        renderDistanceIfEnabled();
       }
 
       // Nettoyer
@@ -972,8 +968,14 @@ function makeHandleDraggable(handle, handleIndex) {
   }
 }
 
+function removeHandlers(){
+  // Nettoyer
+  editHandles.forEach(h => map.removeLayer(h));
+  editHandles = [];
+}
+
 function openPointCreationModal(coord, callback) {
-  const modal = new bootstrap.Modal(document.getElementById('createPointModal'));
+  const modal = new bootstrap.Modal(createPointBtn);
   modal.show();
 
   document.getElementById('pointDesc').value = '';
@@ -992,6 +994,11 @@ function openPointCreationModal(coord, callback) {
     callback(false);
   };
 }
+
+createPointBtn.addEventListener('hide.bs.modal', function (event) {
+  removeHandlers();
+  currentSelectedLine.setLatLngs(originalLatLngs);
+});
 
 function createAndAttachPoint({ desc, color, coord }, handleIndex) {
   const id = nextId++;
@@ -1095,6 +1102,15 @@ function createDistanceLabel(text, latlng) {
     icon,
     interactive: false,
   }).addTo(map);
+}
+
+function reloadDistanceLabels(){
+  masquerToutesLesDistances();
+  if (distanceButton.checked) {    
+    polylines.forEach(entry => {
+        afficherDistanceLigne(entry.line);
+    });
+  }
 }
 
 
