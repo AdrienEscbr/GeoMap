@@ -38,6 +38,54 @@ const lineCloseBtn = document.getElementById('line-close-btn');
 
 const createPointBtn = document.getElementById('createPointModal');
 
+const addPointBtn = document.getElementById('add-point-button');
+
+
+// Crée un élément pour afficher les coordonnées
+const coordDisplay = document.createElement('div');
+coordDisplay.id = 'cursor-coords';
+coordDisplay.style.position = 'absolute';
+coordDisplay.style.pointerEvents = 'none';
+coordDisplay.style.padding = '4px 8px';
+coordDisplay.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+coordDisplay.style.border = '1px solid #ccc';
+coordDisplay.style.borderRadius = '4px';
+coordDisplay.style.fontSize = '12px';
+coordDisplay.style.zIndex = 999;
+coordDisplay.style.display = 'none';
+document.body.appendChild(coordDisplay);
+
+let mouseMoveHandler;
+
+addPointBtn.addEventListener('click', () => {
+  const isActive = addPointBtn.classList.toggle('active');
+  if (isActive) {
+    addPointBtn.style.backgroundColor = '#ddd';
+    map.getContainer().style.cursor = 'crosshair';
+    coordDisplay.style.display = 'block';
+
+    // Met à jour la position et le contenu du tooltip
+    mouseMoveHandler = function (e) {
+      const containerPoint = map.mouseEventToContainerPoint(e.originalEvent);
+      const latlng = map.containerPointToLatLng(containerPoint);
+      coordDisplay.style.left = (e.originalEvent.pageX + 10) + 'px';
+      coordDisplay.style.top = (e.originalEvent.pageY + 10) + 'px';
+      coordDisplay.textContent = `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+    };
+
+    map.on('mousemove', mouseMoveHandler);
+
+  } else {
+    addPointBtn.style.backgroundColor = '';
+    map.getContainer().style.cursor = '';
+    coordDisplay.style.display = 'none';
+
+    if (mouseMoveHandler) {
+      map.off('mousemove', mouseMoveHandler);
+    }
+  }
+});
+
 lineCloseBtn.addEventListener('click', () =>{
   removeHandlers();
 })
