@@ -40,6 +40,8 @@ const createPointBtn = document.getElementById('createPointModal');
 
 const addPointBtn = document.getElementById('add-point-button');
 
+let targetMode = false;
+
 
 // Crée un élément pour afficher les coordonnées
 const coordDisplay = document.createElement('div');
@@ -59,6 +61,9 @@ let mouseMoveHandler;
 
 addPointBtn.addEventListener('click', () => {
   const isActive = addPointBtn.classList.toggle('active');
+
+  targetMode = isActive;
+
   if (isActive) {
     addPointBtn.style.backgroundColor = '#ddd';
     map.getContainer().style.cursor = 'crosshair';
@@ -74,6 +79,8 @@ addPointBtn.addEventListener('click', () => {
     };
 
     map.on('mousemove', mouseMoveHandler);
+    // {lat: 40.27111551706457, lng: 0.48615813104221317}
+
 
   } else {
     addPointBtn.style.backgroundColor = '';
@@ -94,6 +101,34 @@ function closeAllConfigMenus(){
   lineConfigPanel.classList.add('d-none');
   circleConfigPanel.classList.add('d-none');
 }
+
+
+map.on('contextmenu', function (e) {
+  if (!targetMode) return;
+
+  // console.log(`Clic droit aux coordonnées : ${e.latlng.lat}, ${e.latlng.lng}`);
+  
+  openPointCreationModal({ lat: e.latlng.lat, lng: e.latlng.lng }, (confirmed, pointDatas) => {
+    if (confirmed) {
+      const {desc, color, coord} = pointDatas;
+      const id = nextId++;
+
+      const marker = L.circleMarker(coord, {
+        radius: 8,
+        fillColor: color,
+        color: '#000',
+        weight: 1,
+        fillOpacity: 0.9
+      }).addTo(map).bindPopup(popupContent(desc, coord.lat.toFixed(5), coord.lng.toFixed(5)));
+
+      points.push({ id, desc, lat: coord.lat, lng: coord.lng, color, marker });
+
+      renderPointList();
+      saveToLocalStorage();
+    }
+  });
+});
+
 
 // ---------------------------------------------
 // FONCTIONS DE PERSISTENCE (localStorage)
@@ -1006,7 +1041,9 @@ function makeHandleDraggable(handle, handleIndex) {
         createAndAttachPoint(pointData, handleIndex);
       } else {
         // Annulé : restaurer
-        currentSelectedLine.setLatLngs(originalLatLngs);
+        if(currentSelectedLine){
+          currentSelectedLine.setLatLngs(originalLatLngs);
+        }
       }
 
       // Nettoyer
@@ -1045,7 +1082,9 @@ function openPointCreationModal(coord, callback) {
 
 createPointBtn.addEventListener('hide.bs.modal', function (event) {
   removeHandlers();
-  currentSelectedLine.setLatLngs(originalLatLngs);
+  if(currentSelectedLine){
+    currentSelectedLine.setLatLngs(originalLatLngs);
+  }
 });
 
 function createAndAttachPoint({ desc, color, coord }, handleIndex) {
