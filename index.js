@@ -5,6 +5,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 }).addTo(map);
 
+
 // Structures pour stocker les points et polylines
 let points = []; // Chaque élément : { id, desc, lat, lng, color, marker }
 let nextId = 1;  // Pour générer un identifiant unique (sera recalculé au chargement)
@@ -12,6 +13,11 @@ let polylines = [];
 let circles = []; // tableau des cercles {circle, lat, lng, radius, color}
 let currentEditableCircle = null;
 let currentSelectedLine = null;
+let currentHandleIndex = null;
+let currentLineAngle = null;
+let currentSelectedRadioLabel = null;
+let temporaryLine = null;
+
 
 let editHandles = [];
 let originalLatLngs = [];
@@ -36,9 +42,23 @@ const lineDistanceInput = document.getElementById('line-width');
 const lineDeleteBtn = document.getElementById('line-delete-btn');
 const lineCloseBtn = document.getElementById('line-close-btn');
 
+const lineEditBtn = document.getElementById('line-edit-btn')
+const lineSaveBtn = document.getElementById('line-save-btn');
+
+const cancelPointBtn = document.getElementById('cancelPointBtn');
+
 const createPointBtn = document.getElementById('createPointModal');
+const validatePointBtn = document.getElementById('validatePointBtn');
 
 const addPointBtn = document.getElementById('add-point-button');
+
+const radioPoint1 = document.getElementById('radio-point1');
+const radioPoint2 = document.getElementById('radio-point2');
+
+const radioPoint1Label = document.getElementById('radio-point1-label');
+const radioPoint2Label = document.getElementById('radio-point2-label');
+
+const lineAngleInput = document.getElementById('line-angle');
 
 let targetMode = false;
 
@@ -58,6 +78,215 @@ coordDisplay.style.display = 'none';
 document.body.appendChild(coordDisplay);
 
 let mouseMoveHandler;
+
+function toggleSaveEditBtn(){
+  lineEditBtn.addEventListener('click', () =>{
+    lineSaveBtn.classList.remove('d-none');
+    lineEditBtn.classList.add('d-none');
+    setLineConfigInputsDisabled(false)
+  })
+
+  lineSaveBtn.addEventListener('click', () =>{
+    lineEditBtn.classList.remove('d-none');
+    lineSaveBtn.classList.add('d-none');
+    // removeHandlers()
+    setLineConfigInputsDisabled(true)
+    // onDrop()
+
+    // const finalLatLngs = currentSelectedLine.getLatLngs();
+    const finalLatLngs = findPointsFromLine(currentSelectedLine);
+    // const newCoord = finalLatLngs[currentHandleIndex];
+    // console.log("test", editHandles, editHandles[currentHandleIndex])
+    const newCoord = editHandles[currentHandleIndex].getLatLng()
+
+    // console.log("new coord (c pas bon):", newCoord)
+
+    // Ouvre le modal de création de point
+    openPointCreationModal(newCoord, (confirmed, pointData) => {
+      if (confirmed) {
+        createAndAttachPoint(pointData, currentHandleIndex);
+      } else {
+        // Annulé : restaurer
+        if(currentSelectedLine){
+          currentSelectedLine.setLatLngs(originalLatLngs);
+        }
+      }
+
+      currentHandleIndex = null;
+
+      // Nettoyer
+      editHandles.forEach(h => map.removeLayer(h));
+      editHandles = [];
+    });
+  })
+
+  lineDeleteBtn.addEventListener('click', () =>{
+    lineEditBtn.classList.remove('d-none');
+    lineSaveBtn.classList.add('d-none');
+  })
+
+  lineCloseBtn.addEventListener('click', () =>{
+    lineEditBtn.classList.remove('d-none');
+    lineSaveBtn.classList.add('d-none');
+    removeTemporaryLine();
+  })
+
+  cancelPointBtn.addEventListener('click', () =>{
+    lineEditBtn.classList.remove('d-none');
+    lineSaveBtn.classList.add('d-none');
+  })
+}
+
+function removeTemporaryLine(){
+  if(temporaryLine != null){
+    map.removeLayer(temporaryLine);
+    temporaryLine = null;
+  }
+}
+
+function changeLineOrientation(pivotPoint, line, newAngleDeg) {
+  // Vérification de l'angle
+  if (typeof newAngleDeg !== 'number' || newAngleDeg < 0 || newAngleDeg > 360) {
+    console.warn("L'angle doit être un nombre entre 0 et 360 degrés.");
+    return;
+  }
+
+  // console.log("point de pivot :", pivotPoint)
+
+  // const latlngs = line.getLatLngs();
+  // if (latlngs.length !== 2) return;
+
+  const linePoints = findPointsFromLine(line)
+
+  // Identifier le pivot
+  let pivotLatLng, otherLatLng;
+  if (linePoints[0].lat === pivotPoint.lat && linePoints[0].lng === pivotPoint.lng) {
+    pivotLatLng = linePoints[0];
+    otherLatLng = linePoints[1];
+  } else if (linePoints[1].lat === pivotPoint.lat && linePoints[1].lng === pivotPoint.lng) {
+    pivotLatLng = linePoints[1];
+    otherLatLng = linePoints[0];
+  } else {
+    console.warn("Le pivot n'est pas relié à cette ligne.");
+    return;
+  }
+
+  const currentDistance = map.distance(pivotLatLng, otherLatLng);
+
+  // Conversion en radians
+  const angleRad = newAngleDeg * Math.PI / 180;
+
+  // Calcul nouvelle position
+  const earthRadius = 6371000; // m
+  const lat1 = pivotLatLng.lat * Math.PI / 180;
+  const lon1 = pivotLatLng.lng * Math.PI / 180;
+
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(currentDistance / earthRadius) +
+                         Math.cos(lat1) * Math.sin(currentDistance / earthRadius) * Math.cos(angleRad));
+  const lon2 = lon1 + Math.atan2(Math.sin(angleRad) * Math.sin(currentDistance / earthRadius) * Math.cos(lat1),
+                                 Math.cos(currentDistance / earthRadius) - Math.sin(lat1) * Math.sin(lat2));
+
+  const newLatLng = L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
+
+  removeTemporaryLine();
+  // Ligne temporaire
+  temporaryLine = L.geodesic([pivotLatLng, newLatLng], { color: 'red', dashArray: '5, 5' }).addTo(map);
+
+  // Appeler le modal pour créer le nouveau point
+  // openPointCreationModal({ lat: newLatLng.lat, lng: newLatLng.lng }, (confirmed, pointDatas) => {
+  //   map.removeLayer(tempLine);
+
+  //   if (!confirmed || !pointDatas.desc.trim()) {
+  //     // Annuler → remettre la ligne initiale
+  //     line.setLatLngs([latlngs[0], latlngs[1]]);
+  //     return;
+  //   }
+
+  //   const { desc, color, coord } = pointDatas;
+  //   const id = nextId++;
+  //   const marker = L.circleMarker(coord, {
+  //     radius: 8,
+  //     fillColor: color,
+  //     color: '#000',
+  //     weight: 1,
+  //     fillOpacity: 0.9
+  //   }).addTo(map).bindPopup(popupContent(desc, coord.lat.toFixed(5), coord.lng.toFixed(5)));
+
+  //   points.push({ id, desc, lat: coord.lat, lng: coord.lng, color, marker });
+
+  //   // Redessiner la ligne vers le nouveau point
+  //   line.setLatLngs([pivotLatLng, coord]);
+
+  //   renderPointList();
+  //   saveToLocalStorage();
+  // });
+}
+
+
+function initLineConfigPanel(distance, point1Label, point2Label, angle){
+  // init button edit, hide button save
+  lineEditBtn.classList.remove('d-none');
+  lineSaveBtn.classList.add('d-none');
+
+  radioPoint1.checked = true;
+  currentSelectedRadioLabel = radioPoint1Label;
+
+  // set distance value
+  lineDistanceInput.value = distance;
+  // set radio1 label
+  radioPoint1Label.textContent = point1Label
+  // set radio2 label
+  radioPoint2Label.textContent = point2Label
+  // set angle value
+  lineAngleInput.value = angle
+}
+
+function setLineConfigInputsDisabled(disabled) {
+
+  // Sélectionner tous les champs de formulaire à l'intérieur
+  const inputs = lineConfigPanel.querySelectorAll('input, select, textarea');
+
+  inputs.forEach(el => {
+    // On ne désactive pas le bouton Fermer ni Supprimer
+    
+    el.disabled = disabled;
+    
+  });
+}
+
+radioPoint1.addEventListener('change', (radio)=>{
+  // console.log("radio change : ",radioPoint1Label.textContent)
+  currentSelectedRadioLabel = radioPoint1Label;
+  if(currentSelectedLine){
+    angle = getAngleFromPointOnLine(getPointWithLabel(radioPoint1Label.textContent), currentSelectedLine);
+    lineAngleInput.value = angle || 0;
+  }
+  else{
+    return
+  }
+})
+
+radioPoint2.addEventListener('change', (radio)=>{
+  // console.log("radio change : ",radioPoint2Label.textContent)
+  currentSelectedRadioLabel = radioPoint2Label;
+  if(currentSelectedLine){
+    angle = getAngleFromPointOnLine(getPointWithLabel(radioPoint2Label.textContent), currentSelectedLine);
+    lineAngleInput.value = angle || 0;
+  }
+  else{
+    return
+  }
+})
+
+lineAngleInput.addEventListener('input', (input)=>{
+  // console.log(lineAngleInput.value)
+  // console.log("currentSelectedRadioLabel", currentSelectedRadioLabel.textContent)
+  changeLineOrientation(getPointWithLabel(currentSelectedRadioLabel.textContent), currentSelectedLine, Number(lineAngleInput.value))
+})
+
+
+toggleSaveEditBtn();
+setLineConfigInputsDisabled(true)
 
 addPointBtn.addEventListener('click', () => {
   const isActive = addPointBtn.classList.toggle('active');
@@ -98,6 +327,7 @@ lineCloseBtn.addEventListener('click', () =>{
 })
 
 function closeAllConfigMenus(){
+  
   lineConfigPanel.classList.add('d-none');
   circleConfigPanel.classList.add('d-none');
 }
@@ -199,7 +429,7 @@ function loadFromLocalStorage() {
         const p1 = points.find((pt) => pt.id === ldata.id1);
         const p2 = points.find((pt) => pt.id === ldata.id2);
         if (p1 && p2) {
-          const line = L.polyline(
+          const line = L.geodesic(
             [
               [p1.lat, p1.lng],
               [p2.lat, p2.lng],
@@ -636,7 +866,7 @@ document.getElementById('edit-point-form').addEventListener('submit', (e) => {
       const otherPoint = points.find((pt) => pt.id === otherId);
       if (otherPoint) {
         // Créer une nouvelle ligne avec les coordonnées mises à jour
-        const newLine = L.polyline(
+        const newLine = L.geodesic(
           [
             [p.lat, p.lng],
             [otherPoint.lat, otherPoint.lng],
@@ -674,23 +904,23 @@ connectBtn.addEventListener('click', () => {
   if (!p1 || !p2) return;
 
   // Créer la ligne
-  const line = L.polyline(
+  const line = L.geodesic(
     [
       [p1.lat, p1.lng],
       [p2.lat, p2.lng],
     ],
     { color: '#0000FF', weight: 3 }
   ).addTo(map);
+  
+  // Conserver la ligne avec les IDs
+  polylines.push({ id1, id2, line });
 
   if(distanceButton.checked){
     afficherDistanceLigne(line)
   }
-  
-
-  // Conserver la ligne avec les IDs
-  polylines.push({ id1, id2, line });
 
   line.on('click', function () {
+    removeTemporaryLine();
     showLineConfigPanel(line);
   });
 
@@ -836,7 +1066,7 @@ importBtn.addEventListener('click', () => {
       const p1 = points.find(p => p.id === ln.id1);
       const p2 = points.find(p => p.id === ln.id2);
       if (p1 && p2) {
-        const line = L.polyline([[p1.lat, p1.lng], [p2.lat, p2.lng]], { color: '#0000FF', weight: 3 })
+        const line = L.geodesic([[p1.lat, p1.lng], [p2.lat, p2.lng]], { color: '#0000FF', weight: 3 })
           .addTo(map);
         polylines.push({ id1: ln.id1, id2: ln.id2, line });
         addedLines++;
@@ -893,7 +1123,7 @@ lineCloseBtn.addEventListener('click', () => {
 
 lineDeleteBtn.addEventListener('click', () => {
   if (!currentSelectedLine) return;
-
+  
   // Retirer du tableau
   const index = polylines.findIndex(e => e.line === currentSelectedLine);
   if (index !== -1) {
@@ -910,16 +1140,98 @@ lineDeleteBtn.addEventListener('click', () => {
   // Fermer panneau
   currentSelectedLine = null;
   lineConfigPanel.classList.add('d-none');
+
+  removeHandlers();
 });
+
+function findPointsFromLine(line){
+  // Récupérer l'objet polyline complet dans ton tableau polylines
+  const polylineData = polylines.find(p => p.line === line);
+  if (!polylineData) return null; // sécurité si on ne trouve pas
+
+  // Retrouver les points dans le tableau points
+  const point1 = points.find(pt => pt.id === polylineData.id1);
+  const point2 = points.find(pt => pt.id === polylineData.id2);
+
+  if (!point1 || !point2) return null;
+  
+  // console.log("Point 1 :", point1, point1.desc);
+  // console.log("Point 2 :", point2, point2.desc);
+  return [point1, point2]
+}
+
+function getPointWithLat(lat, lng) {
+  return points.find(p => (p.lat === lat && p.lng === lng)) || null;
+}
+
+function getPointWithLabel(desc){
+  return points.find(p => (p.desc === desc)) || null;
+}
+
+function getAngleFromPointOnLine(point, line) {
+  // Vérifier que la ligne est reliée à ce point
+  // const latlngs = line.getLatLngs();
+  // if (latlngs.length !== 2) return null;
+
+  const linePoints = findPointsFromLine(line)
+
+  const isStart = (linePoints[0].lat === point.lat && linePoints[0].lng === point.lng);
+  const isEnd   = (linePoints[1].lat === point.lat && linePoints[1].lng === point.lng);
+
+  if (!isStart && !isEnd) {
+    return null; // pas relié
+  }
+
+  // Déterminer l'autre extrémité
+  const other = isStart ? linePoints[1] : linePoints[0];
+
+  // Calcul de l'angle (azimut) plein nord = 0°, sens horaire
+  const dy = other.lat - point.lat;
+  const dx = other.lng - point.lng;
+
+  // Conversion en radians
+  let angleRad = Math.atan2(dx, dy); // dx/dy inversé car 0° = nord
+  let angleDeg = angleRad * (180 / Math.PI);
+
+  // Normalisation entre 0 et 360
+  if (angleDeg < 0) angleDeg += 360;
+
+  return parseFloat(angleDeg.toFixed(3));
+}
+
+function getDistance(p1, p2){
+  const ldist = new L.Geodesic();
+  const distance = ldist.distance(new L.LatLng(p1.lat, p1.lng), new L.LatLng(p2.lat, p2.lng));
+  return distance;
+}
+
 
 function showLineConfigPanel(line) {
   closeAllConfigMenus();
+  removeHandlers()
+  setLineConfigInputsDisabled(true);
 
-  const latlngs = line.getLatLngs();
-  if (latlngs.length !== 2) return;
+  // console.log(line)
+//   const latlngs = line.getLatLngs();
+//   if (latlngs.length !== 2) return;
+// console.log("pass 0")
+//   const dist = calculateDistance(line);
+//   console.log("pass 1")
+  // lineDistanceInput.value = Math.round(dist);
 
-  const dist = calculateDistance(line);
-  lineDistanceInput.value = Math.round(dist);
+  linePoints = findPointsFromLine(line);
+
+  const dist = getDistance(linePoints[0], linePoints[1])
+
+  angle = getAngleFromPointOnLine(linePoints[0], line);
+  // console.log("angle par rapport à ", linePoints[0].desc, " : ", angle)
+
+  if(linePoints != null){
+    initLineConfigPanel(Math.round(dist), linePoints[0].desc, linePoints[1].desc, angle)
+  }
+  else{
+    console.error("Something went wrong. Please delete the line and create it again.")
+  }
 
   currentSelectedLine = line;
   lineConfigPanel.classList.remove('d-none');
@@ -930,6 +1242,7 @@ function showLineConfigPanel(line) {
 
 polylines.forEach((entry) => {
   entry.line.on('click', function () {
+    removeTemporaryLine();
     showLineConfigPanel(entry.line);
   });
 });
@@ -956,16 +1269,19 @@ function supprimerLigne(ligne) {
   polylines = updatedPolylines;
 }
 
-document.getElementById('line-edit-btn').addEventListener('click', () => {
+
+
+lineEditBtn.addEventListener('click', () => {
   if (!currentSelectedLine) return;
 
-  const latlngs = currentSelectedLine.getLatLngs();
-  originalLatLngs = [...latlngs];
+  let linePoints = findPointsFromLine(currentSelectedLine)
+  // const latlngs = currentSelectedLine.getLatLngs();
+  originalLatLngs = [...linePoints];
 
   editHandles.forEach(h => map.removeLayer(h));
   editHandles = [];
 
-  latlngs.forEach((latlng, idx) => {
+  linePoints.forEach((latlng, idx) => {
     const handle = L.circleMarker(latlng, {
       radius: 6,
       color: '#ff0000',
@@ -986,11 +1302,22 @@ function makeHandleDraggable(handle, handleIndex) {
   let otherEnd = null;
 
   handle.on('mousedown', (e) => {
+    
     map.dragging.disable();
     startPoint = e.latlng;
-    const latlngs = currentSelectedLine.getLatLngs();
-    otherEnd = latlngs[handleIndex === 0 ? 1 : 0];
 
+    let linePoints = findPointsFromLine(currentSelectedLine)
+    // const latlngs = currentSelectedLine.getLatLngs();
+    otherEnd = linePoints[handleIndex === 0 ? 1 : 0];
+
+    currentHandleIndex = handleIndex;
+    
+    // console.log(otherEnd)
+    // console.log(getPointWithLat(otherEnd.lat, otherEnd.lng))
+    // console.log("start point", startPoint)
+    // console.log(getPointWithLat(startPoint.lat, startPoint.lng))
+    
+    
     map.on('mousemove', onDrag);
     map.once('mouseup', onDrop);
   });
@@ -1032,24 +1359,24 @@ function makeHandleDraggable(handle, handleIndex) {
     map.dragging.enable();
     map.off('mousemove', onDrag);
 
-    const finalLatLngs = currentSelectedLine.getLatLngs();
-    const newCoord = finalLatLngs[handleIndex];
+    // const finalLatLngs = currentSelectedLine.getLatLngs();
+    // const newCoord = finalLatLngs[handleIndex];
 
-    // Ouvre le modal de création de point
-    openPointCreationModal(newCoord, (confirmed, pointData) => {
-      if (confirmed) {
-        createAndAttachPoint(pointData, handleIndex);
-      } else {
-        // Annulé : restaurer
-        if(currentSelectedLine){
-          currentSelectedLine.setLatLngs(originalLatLngs);
-        }
-      }
+    // // Ouvre le modal de création de point
+    // openPointCreationModal(newCoord, (confirmed, pointData) => {
+    //   if (confirmed) {
+    //     createAndAttachPoint(pointData, handleIndex);
+    //   } else {
+    //     // Annulé : restaurer
+    //     if(currentSelectedLine){
+    //       currentSelectedLine.setLatLngs(originalLatLngs);
+    //     }
+    //   }
 
-      // Nettoyer
-      editHandles.forEach(h => map.removeLayer(h));
-      editHandles = [];
-    });
+    //   // Nettoyer
+    //   editHandles.forEach(h => map.removeLayer(h));
+    //   editHandles = [];
+    // });
   }
 }
 
@@ -1066,7 +1393,7 @@ function openPointCreationModal(coord, callback) {
   document.getElementById('pointDesc').value = '';
   document.getElementById('pointColor').value = '#ff0000';
 
-  document.getElementById('validatePointBtn').onclick = () => {
+  validatePointBtn.onclick = () => {
     modal.hide();
     callback(true, {
       desc: document.getElementById('pointDesc').value,
@@ -1075,13 +1402,17 @@ function openPointCreationModal(coord, callback) {
     });
   };
 
-  document.getElementById('cancelPointBtn').onclick = () => {
+  cancelPointBtn.onclick = () => {
     callback(false);
   };
 }
 
 createPointBtn.addEventListener('hide.bs.modal', function (event) {
   removeHandlers();
+
+  lineEditBtn.classList.remove('d-none');
+  lineSaveBtn.classList.add('d-none');
+
   if(currentSelectedLine){
     currentSelectedLine.setLatLngs(originalLatLngs);
   }
@@ -1099,8 +1430,10 @@ function createAndAttachPoint({ desc, color, coord }, handleIndex) {
 
   points.push({ id, desc, lat: coord.lat, lng: coord.lng, color, marker });
 
+  let linePoints = findPointsFromLine(currentSelectedLine)
+
   // Mise à jour de la ligne
-  const otherEnd = currentSelectedLine.getLatLngs()[handleIndex === 0 ? 1 : 0];
+  const otherEnd = linePoints[handleIndex === 0 ? 1 : 0];
   const otherPoint = points.find(p => p.lat === otherEnd.lat && p.lng === otherEnd.lng);
   if (!otherPoint) return;
 
@@ -1112,8 +1445,11 @@ function createAndAttachPoint({ desc, color, coord }, handleIndex) {
     // polylines.splice(oldIndex, 1);
   }
 
-  const newLine = L.polyline([coord, otherEnd], { color: '#0000FF', weight: 3 }).addTo(map);
-  newLine.on('click', () => showLineConfigPanel(newLine));
+  const newLine = L.geodesic([coord, otherEnd], { color: '#0000FF', weight: 3 }).addTo(map);
+  newLine.on('click', () => {
+    removeTemporaryLine();
+    showLineConfigPanel(newLine);
+  });
   polylines.push({
     id1: id,
     id2: otherPoint.id,
@@ -1133,24 +1469,28 @@ function createAndAttachPoint({ desc, color, coord }, handleIndex) {
 
 
 
-function calculateDistance(line){
-  let distance = 0;
-  const latlngs = line.getLatLngs();
-  if (latlngs.length !== 2) return distance;
+// function calculateDistance(line){
+//   let distance = 0;
+//   const latlngs = line.getLatLngs();
+//   if (latlngs.length !== 2) return distance;
 
-  distance = latlngs[0].distanceTo(latlngs[1]);
-  return distance;
-}
+//   distance = latlngs[0].distanceTo(latlngs[1]);
+//   return distance;
+// }
 
 function afficherDistanceLigne(line) {
-  const latlngs = line.getLatLngs();
-  if (latlngs.length !== 2) return;
+  // const latlngs = line.getLatLngs();
+  // if (latlngs.length !== 2) return;
 
-  const midLat = (latlngs[0].lat + latlngs[1].lat) / 2;
-  const midLng = (latlngs[0].lng + latlngs[1].lng) / 2;
+  const linePoints = findPointsFromLine(line)
+  // console.log(linePoints)
+
+  const midLat = (linePoints[0].lat + linePoints[1].lat) / 2;
+  const midLng = (linePoints[0].lng + linePoints[1].lng) / 2;
   const midPoint = L.latLng(midLat, midLng);
 
-  const distance = latlngs[0].distanceTo(latlngs[1]);
+  // const distance = linePoints[0].distanceTo(linePoints[1]);
+  const distance = getDistance(linePoints[0], linePoints[1])
 
   label = createDistanceLabel(`${distance.toFixed(0)} m`, midPoint)
 
